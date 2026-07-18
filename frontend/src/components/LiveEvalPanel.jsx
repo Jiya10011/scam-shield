@@ -33,8 +33,13 @@ export default function LiveEvalPanel() {
             Live evaluation
           </h2>
           <p className="text-xs" style={{ color: "var(--color-slate)" }}>
-            Runs the classifier against 8 known scam/legit patterns right now, one at a time — no cherry-picking.
+            Runs the classifier against 4 known scam/legit patterns right now, one at a time — no cherry-picking.
           </p>
+          {!report && (
+            <p className="text-[11px] mt-1" style={{ color: "var(--color-slate)" }}>
+              Uses 4 requests from today's API quota. Results are cached below once run.
+            </p>
+          )}
         </div>
         <button
           onClick={handleRun}
@@ -43,13 +48,13 @@ export default function LiveEvalPanel() {
           style={{ backgroundColor: "var(--color-brand)", fontFamily: "var(--font-display)" }}
         >
           <PlayCircle size={16} />
-          {running ? "Running…" : "Run live evaluation"}
+          {running ? "Running…" : report ? "Re-run (uses more quota)" : "Run live evaluation"}
         </button>
       </div>
 
       {running && (
         <p className="text-xs mt-3" style={{ color: "var(--color-slate)" }}>
-          Classifying 8 transcripts one at a time — this takes ~15–25 seconds.
+          Classifying 4 transcripts one at a time — this takes ~10–15 seconds.
         </p>
       )}
 

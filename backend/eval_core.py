@@ -18,12 +18,14 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "transcripts_d
 SCAM_VERDICTS = {"SCAM", "LIKELY_SCAM"}
 SAFE_VERDICTS = {"SAFE", "LIKELY_SAFE"}
 
-# A smaller, balanced subset for the LIVE in-demo evaluation panel — kept intentionally
-# small since free-tier hosting (e.g. Render's 0.1 CPU instance) can't reliably sustain
-# many concurrent Gemini calls. Full accuracy testing still uses all 50 via evaluate.py.
+# A small, balanced subset for the LIVE in-demo evaluation panel. Kept deliberately tiny —
+# the free-tier Gemini API key is capped at 20 requests/DAY (not per-minute), shared across
+# every /analyze call and every evaluation run. 4 items leaves headroom for live "check a
+# message" demos afterward within the same daily budget. Full accuracy testing (50 items)
+# should be run separately via evaluate.py, ideally on a day with quota to spare.
 DEMO_SUBSET_IDS = [
-    "s001", "s006", "s013", "s021",
-    "l001", "l006", "l011", "l018",
+    "s001", "s013",
+    "l001", "l011",
 ]
 
 
