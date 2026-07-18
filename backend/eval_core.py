@@ -67,20 +67,29 @@ def _classify_item(item, max_retries=3):
     }
 
 
-def run_evaluation(subset_ids=None, max_workers=2):
+def run_evaluation(subset_ids=None, max_workers=1):
     """Runs classification over the dataset (or a subset) and returns metrics + per-item results.
-    Concurrency is intentionally conservative (2 workers) since free-tier hosting environments
-    (e.g. Render's 0.1 CPU instance) can't reliably sustain many concurrent Gemini calls."""
+    Defaults to fully sequential (max_workers=1) for the live-demo endpoint — a burst of even
+    2-3 concurrent calls was enough to trip Gemini's free-tier rate limit in production.
+    Sequential is slower but far more reliable for a live audience-facing demo."""
     dataset = load_dataset()
     if subset_ids:
         id_set = set(subset_ids)
         dataset = [item for item in dataset if item["id"] in id_set]
 
     results = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_classify_item, item): item for item in dataset}
-        for future in as_completed(futures):
-            results.append(future.result())
+    if max_workers == 1:
+        # Fully sequential, with a small pause between calls — the safest mode for
+        # respecting free-tier per-minute rate limits during a live demo.
+        for i, item in enumerate(dataset):
+            results.append(_classify_item(item))
+            if i < len(dataset) - 1:
+                time.sleep(0.8)
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_classify_item, item): item for item in dataset}
+            for future in as_completed(futures):
+                results.append(future.result())
 
     # Keep output order stable (matches dataset order) regardless of completion order
     order = {item["id"]: i for i, item in enumerate(dataset)}

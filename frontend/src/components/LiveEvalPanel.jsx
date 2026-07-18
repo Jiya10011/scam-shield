@@ -33,7 +33,7 @@ export default function LiveEvalPanel() {
             Live evaluation
           </h2>
           <p className="text-xs" style={{ color: "var(--color-slate)" }}>
-            Runs the classifier against 16 known scam/legit patterns right now — no cherry-picking.
+            Runs the classifier against 8 known scam/legit patterns right now, one at a time — no cherry-picking.
           </p>
         </div>
         <button
@@ -49,7 +49,7 @@ export default function LiveEvalPanel() {
 
       {running && (
         <p className="text-xs mt-3" style={{ color: "var(--color-slate)" }}>
-          Classifying 16 transcripts against the model in real time — this takes ~20–30 seconds.
+          Classifying 8 transcripts one at a time — this takes ~15–25 seconds.
         </p>
       )}
 
@@ -68,11 +68,22 @@ export default function LiveEvalPanel() {
           </div>
 
           {report.error_count > 0 && (
-            <p className="text-xs mb-3 flex items-center gap-1.5" style={{ color: "var(--color-slate)" }}>
-              <AlertCircle size={13} />
-              {report.error_count} item{report.error_count === 1 ? "" : "s"} hit an API error (likely rate-limited)
-              and were excluded from the metrics above — shown in amber below.
-            </p>
+            <details className="text-xs mb-3" style={{ color: "var(--color-slate)" }}>
+              <summary className="flex items-center gap-1.5 cursor-pointer">
+                <AlertCircle size={13} />
+                {report.error_count} item{report.error_count === 1 ? "" : "s"} hit an API error and
+                were excluded from the metrics above — click to see details.
+              </summary>
+              <ul className="mt-2 flex flex-col gap-1 pl-1">
+                {report.results
+                  .filter((r) => r.errored)
+                  .map((r) => (
+                    <li key={r.id} className="font-mono text-[11px] break-all">
+                      {r.id}: {r.error || "no error detail captured"}
+                    </li>
+                  ))}
+              </ul>
+            </details>
           )}
 
           <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
