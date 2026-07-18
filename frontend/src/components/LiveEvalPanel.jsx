@@ -81,7 +81,7 @@ export default function LiveEvalPanel() {
                 key={r.id}
                 title={
                   r.errored
-                    ? `${r.id} · API error, excluded from metrics`
+                    ? `${r.id} · API error, excluded from metrics · ${r.error || "no details"}`
                     : `${r.id} · actual: ${r.actual} · predicted: ${r.predicted_verdict} · risk ${r.risk_score}`
                 }
                 className="flex flex-col items-center gap-0.5 rounded-lg py-2"

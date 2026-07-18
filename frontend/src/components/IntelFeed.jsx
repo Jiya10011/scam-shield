@@ -25,7 +25,12 @@ export default function IntelFeed({ refreshKey }) {
   useEffect(() => {
     let cancelled = false;
     fetchStats()
-      .then((data) => !cancelled && setStats(data))
+      .then((data) => {
+        if (!cancelled) {
+          setStats(data);
+          setError(false);
+        }
+      })
       .catch(() => !cancelled && setError(true));
     return () => {
       cancelled = true;

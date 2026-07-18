@@ -18,12 +18,12 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "transcripts_d
 SCAM_VERDICTS = {"SCAM", "LIKELY_SCAM"}
 SAFE_VERDICTS = {"SAFE", "LIKELY_SAFE"}
 
-# A smaller, balanced subset for the LIVE in-demo evaluation panel, so judges
-# aren't waiting on 50 sequential Gemini calls. Includes 2 of the deliberately
-# tricky "legit but urgent-sounding" cases to keep the false-positive claim honest.
+# A smaller, balanced subset for the LIVE in-demo evaluation panel — kept intentionally
+# small since free-tier hosting (e.g. Render's 0.1 CPU instance) can't reliably sustain
+# many concurrent Gemini calls. Full accuracy testing still uses all 50 via evaluate.py.
 DEMO_SUBSET_IDS = [
-    "s001", "s003", "s006", "s009", "s013", "s017", "s021", "s024",
-    "l001", "l003", "l006", "l009", "l011", "l014", "l018", "l024",
+    "s001", "s006", "s013", "s021",
+    "l001", "l006", "l011", "l018",
 ]
 
 
@@ -50,7 +50,8 @@ def _classify_item(item, max_retries=3):
         except Exception as e:
             last_error = str(e)
             # Back off before retrying — likely a transient rate-limit (429) error
-            time.sleep(1.5 * (attempt + 1))
+            # or the low-CPU host struggling under concurrent load
+            time.sleep(3 * (attempt + 1))
 
     # All retries exhausted — mark as a genuine API error, NOT a wrong classification.
     # This is deliberately excluded from accuracy/FP/FN math below, since counting
@@ -66,10 +67,10 @@ def _classify_item(item, max_retries=3):
     }
 
 
-def run_evaluation(subset_ids=None, max_workers=3):
+def run_evaluation(subset_ids=None, max_workers=2):
     """Runs classification over the dataset (or a subset) and returns metrics + per-item results.
-    Uses a small thread pool for concurrency without tripping API rate limits — enough to be
-    faster than fully sequential, conservative enough not to trigger 429s on free-tier keys."""
+    Concurrency is intentionally conservative (2 workers) since free-tier hosting environments
+    (e.g. Render's 0.1 CPU instance) can't reliably sustain many concurrent Gemini calls."""
     dataset = load_dataset()
     if subset_ids:
         id_set = set(subset_ids)
