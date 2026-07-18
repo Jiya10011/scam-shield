@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap");
+
+@theme {
+  /* Deep navy/indigo — authority + trust base */
+  --color-ink: #0f1435;
+  --color-ink-light: #1b2354;
+
+  /* Fixed brand navy — stays dark in BOTH themes, so white text on it always works */
+  --color-brand: #1b2354;
+
+  /* Off-white background */
+  --color-paper: #f7f7fb;
+  --color-paper-dim: #ececf3;
+
+  /* Verdict colors */
+  --color-danger: #c4362b;
+  --color-danger-dim: #f8e3e1;
+  --color-warn: #d98e04;
+  --color-warn-dim: #fbeed2;
+  --color-safe: #1e8a5f;
+  --color-safe-dim: #dff0e8;
+
+  /* Secondary text */
+  --color-slate: #4a5578;
+
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-border: rgba(0, 0, 0, 0.05);
+
+  --font-display: "Archivo", sans-serif;
+  --font-body: "Inter", sans-serif;
+}
+
+[data-theme="dark"] {
+  --color-ink: #eef0fb;
+  --color-ink-light: #c7cdf0;
+  --color-paper: #0b0e21;
+  --color-paper-dim: #171b3a;
+  --color-danger: #ff6b5e;
+  --color-danger-dim: #3a1a1c;
+  --color-warn: #f2b33d;
+  --color-warn-dim: #3a2c10;
+  --color-safe: #4ade95;
+  --color-safe-dim: #113023;
+  --color-slate: #9aa1c9;
+  --color-surface: #12163082;
+  --color-border: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] body {
+  background-color: var(--color-paper);
+  background-image: radial-gradient(circle, #232a52 1px, transparent 1px);
+}
+
+body {
+  background-color: var(--color-paper);
+  background-image: radial-gradient(circle, #d9dae8 1px, transparent 1px);
+  background-size: 22px 22px;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+}
+
+@keyframes radar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-sweep {
+  animation: radar-spin 1.4s linear infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+/* Signature element: verdict seal stamp-in animation */
+@keyframes stamp-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.4) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.92) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.seal-animate {
+  animation: stamp-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-enter {
+  animation: card-enter 0.35s ease-out both;
+}
+
+/* Smooth color transition when toggling dark/light, without animating layout */
+body,
+[class*="rounded"],
+button,
+input,
+textarea,
+select {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-enter {
+    animation: none;
+  }
+}
+
+/* Visible keyboard focus, per accessibility floor */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
