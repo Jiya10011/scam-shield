@@ -26,7 +26,15 @@ from typing import Optional
 # The API key is read from the environment (never hardcode it).
 # In main.py we load .env before this module is used.
 
-GEMINI_MODEL = "gemini-2.0-flash "   # fast + cheap, good for real-time classification
+GEMINI_MODEL = "gemini-2.0-flash"  # fast + cheap, good for real-time classification
+
+# Diagnostic: prints the exact model string (via repr, so any hidden
+# whitespace or invisible characters show up explicitly instead of looking
+# like a normal string) whenever this module loads. Check Render's logs
+# right after "Application startup complete" if a model-name error ever
+# comes back — this line tells you immediately whether the constant itself
+# is clean.
+print(f"[scam_agent] Using GEMINI_MODEL = {GEMINI_MODEL!r}", flush=True)
 
 
 def configure_gemini():
@@ -167,7 +175,11 @@ def classify_transcript(text: str, target_language: str = "auto") -> Classificat
     prefilter_results = run_prefilter(text)
 
     model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
+        # .strip() defensively removes any stray leading/trailing whitespace
+        # (including invisible characters like non-breaking spaces) so a
+        # copy-paste or autocomplete slip in the constant above can never
+        # again produce Gemini's "unexpected model name format" error.
+        model_name=GEMINI_MODEL.strip(),
         system_instruction=SYSTEM_INSTRUCTIONS,
     )
 
