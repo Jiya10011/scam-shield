@@ -26,7 +26,7 @@ from typing import Optional
 # The API key is read from the environment (never hardcode it).
 # In main.py we load .env before this module is used.
 
-GEMINI_MODEL = "gemini-2.5-flash"  # fast + cheap, good for real-time classification
+GEMINI_MODEL = "gemini-3.5-flash"  # fast + cheap, good for real-time classification
 
 # Diagnostic: prints the exact model string (via repr, so any hidden
 # whitespace or invisible characters show up explicitly instead of looking
