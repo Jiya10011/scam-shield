@@ -35,12 +35,23 @@ def load_dataset():
 
 
 def _classify_item(item, max_retries=3):
+    # Progress line so a long sequential run isn't silent — evaluate.py only prints
+    # its summary after run_evaluation() returns, so without this you see nothing
+    # on screen for the full duration of a 50-item run.
+    print(f"  Testing {item['id']}...", flush=True)
+
     last_error = None
     for attempt in range(max_retries):
         try:
             result = classify_transcript(item["text"])
             predicted_scam = result.verdict in SCAM_VERDICTS
             actual_scam = item["label"] == "scam"
+            status = "correct" if predicted_scam == actual_scam else "WRONG"
+            print(
+                f"    -> {item['id']}: predicted {result.verdict} "
+                f"(actual: {item['label']}) [{status}]",
+                flush=True,
+            )
             return {
                 "id": item["id"],
                 "actual": item["label"],
@@ -51,13 +62,20 @@ def _classify_item(item, max_retries=3):
             }
         except Exception as e:
             last_error = str(e)
+            wait = 3 * (attempt + 1)
+            print(
+                f"    ! {item['id']} attempt {attempt + 1}/{max_retries} failed: "
+                f"{last_error} -- retrying in {wait}s",
+                flush=True,
+            )
             # Back off before retrying — likely a transient rate-limit (429) error
             # or the low-CPU host struggling under concurrent load
-            time.sleep(3 * (attempt + 1))
+            time.sleep(wait)
 
     # All retries exhausted — mark as a genuine API error, NOT a wrong classification.
     # This is deliberately excluded from accuracy/FP/FN math below, since counting
     # a rate-limit failure as a "wrong answer" would misrepresent model accuracy.
+    print(f"    x {item['id']} gave up after {max_retries} attempts: {last_error}", flush=True)
     return {
         "id": item["id"],
         "actual": item["label"],
@@ -79,11 +97,16 @@ def run_evaluation(subset_ids=None, max_workers=1):
         id_set = set(subset_ids)
         dataset = [item for item in dataset if item["id"] in id_set]
 
+    total_items = len(dataset)
+    print(f"Starting evaluation of {total_items} item(s), max_workers={max_workers}...\n", flush=True)
+    start_time = time.time()
+
     results = []
     if max_workers == 1:
         # Fully sequential, with a small pause between calls — the safest mode for
         # respecting free-tier per-minute rate limits during a live demo.
         for i, item in enumerate(dataset):
+            print(f"[{i + 1}/{total_items}]", end=" ", flush=True)
             results.append(_classify_item(item))
             if i < len(dataset) - 1:
                 time.sleep(0.8)
@@ -92,6 +115,9 @@ def run_evaluation(subset_ids=None, max_workers=1):
             futures = {executor.submit(_classify_item, item): item for item in dataset}
             for future in as_completed(futures):
                 results.append(future.result())
+
+    elapsed = time.time() - start_time
+    print(f"\nFinished {total_items} item(s) in {elapsed:.1f}s\n", flush=True)
 
     # Keep output order stable (matches dataset order) regardless of completion order
     order = {item["id"]: i for i, item in enumerate(dataset)}

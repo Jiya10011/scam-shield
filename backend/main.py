@@ -6,9 +6,12 @@ Endpoints:
   GET  /stats    -> aggregate demo stats (for the authority dashboard)
   POST /report   -> mock "submit to NCRB" endpoint (logs it, returns a fake ref ID)
   GET  /health   -> simple health check for deployment verification
+  POST /evaluate/live -> runs the demo-subset evaluation (cached after first
+                          successful run, so repeat clicks don't burn quota)
 """
 
 import os
+import json
 import uuid
 import random
 from datetime import datetime, timezone
@@ -30,12 +33,26 @@ app = FastAPI(title="Citizen Fraud Shield API", version="0.1.0")
 
 # ---------------------------------------------------------------------------
 # CORS — allow your Vercel frontend to call this API.
-# During local dev this allows everything; TIGHTEN this to your actual
-# Vercel domain before final deployment (see Step 6 notes below).
+#
+# NOTE: allow_origins=["*"] combined with allow_credentials=True is invalid
+# per the CORS spec — browsers silently block the response client-side even
+# though the backend returns 200, which shows up in the frontend as a bare
+# "NetworkError when attempting to fetch resource" with nothing useful in
+# the backend logs. Listing explicit origins (below) is required once
+# allow_credentials=True is set.
+#
+# Update ALLOWED_ORIGINS if your Vercel URL changes, or add a preview-deploy
+# domain here if you test from one.
 # ---------------------------------------------------------------------------
+ALLOWED_ORIGINS = [
+    "https://scam-shield-rust.vercel.app",
+    "http://localhost:5173",  # local frontend dev — remove if you want to lock this down for submission
+    "http://localhost:3000",  # in case the frontend dev server uses this port instead
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: replace with ["https://your-app.vercel.app"] before submission
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +66,16 @@ configure_gemini()
 # Resets on server restart — that's fine for a hackathon demo.
 # ---------------------------------------------------------------------------
 SESSION_LOG = []
+
+# ---------------------------------------------------------------------------
+# Cache for the live-evaluation demo panel. DEMO_SUBSET_IDS is a fixed set of
+# 4 items, so there's no reason to re-spend API quota every time someone
+# clicks "Re-run" — especially on a free-tier key with a daily cap shared
+# across every /analyze call too. Run once successfully, cache to disk,
+# serve from cache after that. Delete demo_eval_cache.json locally if you
+# genuinely want to force a fresh run (e.g. after fixing a bug in scam_agent).
+# ---------------------------------------------------------------------------
+EVAL_CACHE_PATH = os.path.join(os.path.dirname(__file__), "demo_eval_cache.json")
 
 
 class AnalyzeRequest(BaseModel):
@@ -81,7 +108,17 @@ def analyze(payload: AnalyzeRequest):
     if not payload.text or not payload.text.strip():
         raise HTTPException(status_code=400, detail="text field cannot be empty")
 
-    result: ClassificationResult = classify_transcript(payload.text, payload.target_language)
+    # Wrapped so a Gemini-side failure (quota, transient outage, etc.) returns
+    # a clean 503 with a real message instead of an unhandled 500 — which
+    # browsers report as a CORS error even when CORS itself is fine, since
+    # FastAPI's default 500 response skips normal middleware header handling.
+    try:
+        result: ClassificationResult = classify_transcript(payload.text, payload.target_language)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Classification temporarily unavailable: {str(e)}",
+        )
 
     session_id = str(uuid.uuid4())[:8]
     entry = {
@@ -135,11 +172,29 @@ def report(payload: ReportRequest):
 
 
 @app.post("/evaluate/live")
-def evaluate_live():
+def evaluate_live(force_refresh: bool = False):
     """
-    Runs the classifier against a balanced 16-item demo subset of the dataset
+    Runs the classifier against a balanced 4-item demo subset of the dataset
     LIVE, in front of whoever is watching. Proves the accuracy/false-positive
     numbers in the deck instead of just asserting them.
+
+    Cached to disk after the first successful run (no items errored) so
+    repeat clicks — including during judging — don't spend extra quota.
+    Pass ?force_refresh=true to bypass the cache and re-run for real.
     """
+    if not force_refresh and os.path.exists(EVAL_CACHE_PATH):
+        with open(EVAL_CACHE_PATH) as f:
+            cached = json.load(f)
+        cached["_cached"] = True
+        return cached
+
     report_data = run_evaluation(subset_ids=DEMO_SUBSET_IDS)
+
+    # Only cache a clean run — if items errored (e.g. quota exhausted mid-run),
+    # caching that would freeze a broken result as the permanent demo state.
+    if report_data.get("error_count", 0) == 0:
+        with open(EVAL_CACHE_PATH, "w") as f:
+            json.dump(report_data, f)
+
+    report_data["_cached"] = False
     return report_data
