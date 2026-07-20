@@ -18,15 +18,24 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "transcripts_d
 SCAM_VERDICTS = {"SCAM", "LIKELY_SCAM"}
 SAFE_VERDICTS = {"SAFE", "LIKELY_SAFE"}
 
-# A small, balanced subset for the LIVE in-demo evaluation panel. Kept deliberately tiny —
-# the free-tier Gemini API key is capped at 20 requests/DAY (not per-minute), shared across
-# every /analyze call and every evaluation run. 4 items leaves headroom for live "check a
-# message" demos afterward within the same daily budget. Full accuracy testing (50 items)
-# should be run separately via evaluate.py, ideally on a day with quota to spare.
+# A small, balanced subset for the LIVE in-demo evaluation panel. Kept deliberately
+# tiny — the free-tier Gemini key is capped at 5 requests/MINUTE per model, shared
+# across every /analyze call and every evaluation run. 4 items leaves headroom for
+# live "check a message" demos afterward within the same per-minute budget.
+# Full accuracy testing (50 items) should be run separately via evaluate.py.
 DEMO_SUBSET_IDS = [
     "s001", "s013",
     "l001", "l011",
 ]
+
+# Free-tier quota is 5 requests/minute per model (GenerateRequestsPerMinutePerProject
+# PerModel-FreeTier) — NOT the daily cap this was originally tuned for. 5/minute means
+# roughly one request every 12 seconds is the sustainable ceiling; SECONDS_BETWEEN_CALLS
+# is set with margin below that so a normal run doesn't trip the limit at all.
+SECONDS_BETWEEN_CALLS = 13
+# Retry backoff also needs to respect the per-minute window, not just be "a few seconds" —
+# a failed attempt that retries too fast lands in the same still-exhausted minute.
+RETRY_BACKOFF_SECONDS = 15
 
 
 def load_dataset():
@@ -62,14 +71,14 @@ def _classify_item(item, max_retries=3):
             }
         except Exception as e:
             last_error = str(e)
-            wait = 3 * (attempt + 1)
+            wait = RETRY_BACKOFF_SECONDS * (attempt + 1)
             print(
                 f"    ! {item['id']} attempt {attempt + 1}/{max_retries} failed: "
                 f"{last_error} -- retrying in {wait}s",
                 flush=True,
             )
-            # Back off before retrying — likely a transient rate-limit (429) error
-            # or the low-CPU host struggling under concurrent load
+            # Back off before retrying — likely a per-minute rate-limit (429) error,
+            # so the wait needs to be long enough to land in a fresh quota window.
             time.sleep(wait)
 
     # All retries exhausted — mark as a genuine API error, NOT a wrong classification.
@@ -89,27 +98,31 @@ def _classify_item(item, max_retries=3):
 
 def run_evaluation(subset_ids=None, max_workers=1):
     """Runs classification over the dataset (or a subset) and returns metrics + per-item results.
-    Defaults to fully sequential (max_workers=1) for the live-demo endpoint — a burst of even
-    2-3 concurrent calls was enough to trip Gemini's free-tier rate limit in production.
-    Sequential is slower but far more reliable for a live audience-facing demo."""
+    Defaults to fully sequential (max_workers=1) — a burst of even 2-3 concurrent calls
+    is enough to blow through a 5-requests/minute free-tier quota instantly. Sequential
+    with SECONDS_BETWEEN_CALLS pacing is slower but actually stays under the limit."""
     dataset = load_dataset()
     if subset_ids:
         id_set = set(subset_ids)
         dataset = [item for item in dataset if item["id"] in id_set]
 
     total_items = len(dataset)
-    print(f"Starting evaluation of {total_items} item(s), max_workers={max_workers}...\n", flush=True)
+    est_minutes = (total_items * SECONDS_BETWEEN_CALLS) / 60
+    print(
+        f"Starting evaluation of {total_items} item(s), max_workers={max_workers}, "
+        f"~{SECONDS_BETWEEN_CALLS}s between calls (est. {est_minutes:.1f} min minimum)...\n",
+        flush=True,
+    )
     start_time = time.time()
 
     results = []
     if max_workers == 1:
-        # Fully sequential, with a small pause between calls — the safest mode for
-        # respecting free-tier per-minute rate limits during a live demo.
+        # Fully sequential, paced to stay under the 5-requests/minute free-tier cap.
         for i, item in enumerate(dataset):
             print(f"[{i + 1}/{total_items}]", end=" ", flush=True)
             results.append(_classify_item(item))
             if i < len(dataset) - 1:
-                time.sleep(0.8)
+                time.sleep(SECONDS_BETWEEN_CALLS)
     else:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(_classify_item, item): item for item in dataset}
