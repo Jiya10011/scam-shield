@@ -4,47 +4,61 @@ scam_agent.py
 Two-layer scam detection agent:
   1. Rule-based pre-filter: fast keyword/pattern matching against known
      digital-arrest-scam red-flag categories. Cheap, explainable, runs first.
-  2. Gemini reasoning layer: takes the transcript + the pre-filter's findings
+  2. LLM reasoning layer: takes the transcript + the pre-filter's findings
      and produces a structured verdict (risk score, flags, explanation, action).
 
-Why two layers instead of "just ask Gemini"?
+Why two layers instead of "just ask the LLM"?
   - Faster/cheaper: obviously-safe text can be short-circuited without an API call
   - More explainable: the pre-filter gives you concrete evidence to show judges
-  - More robust: Gemini reasons WITH detected signals as context, not from scratch
+  - More robust: the model reasons WITH detected signals as context, not from scratch
+
+---------------------------------------------------------------------------
+MIGRATED FROM GEMINI TO GROQ
+---------------------------------------------------------------------------
+Groq's free tier (30 requests/minute, 1,000 requests/day on
+llama-3.3-70b-versatile) is far less restrictive than the Gemini free tier's
+5/minute + 20/day caps, which is what forced this switch. Groq's API is
+OpenAI-compatible, so this uses the `groq` package's client rather than
+`google.generativeai`. Prompt/response-parsing logic is unchanged in shape;
+only the client setup and the call itself differ.
+---------------------------------------------------------------------------
 """
 
 import os
 import re
 import json
-import google.generativeai as genai
+from groq import Groq
 from dataclasses import dataclass, field
 from typing import Optional
 
 # ---------------------------------------------------------------------------
-# STEP 3.1 — Configure Gemini
+# STEP 3.1 — Configure Groq
 # ---------------------------------------------------------------------------
 # The API key is read from the environment (never hardcode it).
 # In main.py we load .env before this module is used.
 
-GEMINI_MODEL = "gemini-3.5-flash"  # fast + cheap, good for real-time classification
+GROQ_MODEL = "llama-3.3-70b-versatile"  # strong general-purpose model, generous free-tier limits
 
-# Diagnostic: prints the exact model string (via repr, so any hidden
-# whitespace or invisible characters show up explicitly instead of looking
-# like a normal string) whenever this module loads. Check Render's logs
-# right after "Application startup complete" if a model-name error ever
-# comes back — this line tells you immediately whether the constant itself
-# is clean.
-print(f"[scam_agent] Using GEMINI_MODEL = {GEMINI_MODEL!r}", flush=True)
+print(f"[scam_agent] Using GROQ_MODEL = {GROQ_MODEL!r}", flush=True)
+
+_client: Optional[Groq] = None
 
 
 def configure_gemini():
-    api_key = os.environ.get("GEMINI_API_KEY")
+    """
+    NOTE: kept this function name as `configure_gemini` so main.py's existing
+    `from scam_agent import ... configure_gemini` import doesn't need to change.
+    It now configures the Groq client instead. Rename freely on both sides if
+    you'd rather call it configure_groq() / configure_llm().
+    """
+    global _client
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "GEMINI_API_KEY not set. Copy backend/.env.example to backend/.env "
-            "and add your key from https://aistudio.google.com/apikey"
+            "GROQ_API_KEY not set. Add it to backend/.env "
+            "and get a free key from https://console.groq.com"
         )
-    genai.configure(api_key=api_key)
+    _client = Groq(api_key=api_key)
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +117,7 @@ def run_prefilter(text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# STEP 3.3 — Gemini reasoning layer
+# STEP 3.3 — LLM reasoning layer
 # ---------------------------------------------------------------------------
 
 SYSTEM_INSTRUCTIONS = """You are a fraud-detection assistant for a citizen safety app in India.
@@ -171,29 +185,29 @@ class ClassificationResult:
 
 
 def classify_transcript(text: str, target_language: str = "auto") -> ClassificationResult:
-    """Main entry point: runs the pre-filter, then calls Gemini for the final verdict."""
+    """Main entry point: runs the pre-filter, then calls the LLM for the final verdict."""
+    if _client is None:
+        raise RuntimeError("Groq client not configured — configure_gemini() must be called first.")
+
     prefilter_results = run_prefilter(text)
-
-    model = genai.GenerativeModel(
-        # .strip() defensively removes any stray leading/trailing whitespace
-        # (including invisible characters like non-breaking spaces) so a
-        # copy-paste or autocomplete slip in the constant above can never
-        # again produce Gemini's "unexpected model name format" error.
-        model_name=GEMINI_MODEL.strip(),
-        system_instruction=SYSTEM_INSTRUCTIONS,
-    )
-
     prompt = build_user_prompt(text, prefilter_results, target_language)
 
-    response = model.generate_content(
-        prompt,
-        generation_config={"response_mime_type": "application/json"},
+    response = _client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_INSTRUCTIONS},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.3,
     )
 
+    raw_text = response.choices[0].message.content
+
     try:
-        parsed = json.loads(response.text)
-    except (json.JSONDecodeError, AttributeError) as e:
-        # Fallback: if Gemini returns something unexpected, don't crash the API
+        parsed = json.loads(raw_text)
+    except (json.JSONDecodeError, AttributeError, TypeError) as e:
+        # Fallback: if the model returns something unexpected, don't crash the API
         parsed = {
             "verdict": "LIKELY_SCAM" if prefilter_results else "LIKELY_SAFE",
             "risk_score": 60 if prefilter_results else 20,
