@@ -5,7 +5,7 @@ dataset and prints an accuracy / false-positive / false-negative report.
 Run from the backend/ directory (with your venv activated):
     python evaluate.py
 
-Requires GEMINI_API_KEY set in backend/.env (makes 50 real API calls).
+Requires GROQ_API_KEY set in backend/.env (makes 50 real API calls).
 """
 
 from dotenv import load_dotenv

@@ -23,7 +23,9 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # Load environment variables from .env BEFORE importing scam_agent,
-# since scam_agent.configure_gemini() reads GEMINI_API_KEY at call time.
+# since scam_agent.configure_gemini() reads GROQ_API_KEY at call time
+# (function name kept as configure_gemini() from the pre-migration Gemini
+# setup — see the note in scam_agent.py for why it wasn't renamed).
 load_dotenv()
 
 from scam_agent import classify_transcript, configure_gemini, ClassificationResult
@@ -58,7 +60,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure Gemini once at startup
+# Configure the Groq client once at startup (see note above re: function name)
 configure_gemini()
 
 # ---------------------------------------------------------------------------
@@ -68,12 +70,12 @@ configure_gemini()
 SESSION_LOG = []
 
 # ---------------------------------------------------------------------------
-# Cache for the live-evaluation demo panel. DEMO_SUBSET_IDS is a fixed set of
-# 4 items, so there's no reason to re-spend API quota every time someone
-# clicks "Re-run" — especially on a free-tier key with a daily cap shared
-# across every /analyze call too. Run once successfully, cache to disk,
-# serve from cache after that. Delete demo_eval_cache.json locally if you
-# genuinely want to force a fresh run (e.g. after fixing a bug in scam_agent).
+# Cache for the live-evaluation demo panel. Even though Groq's free tier
+# (30 req/min, 1,000/day) is far more generous than Gemini's old cap, there's
+# still no reason to re-spend quota every time someone clicks "Re-run" during
+# judging. Run once successfully, cache to disk, serve from cache after that.
+# Delete demo_eval_cache.json locally if you genuinely want to force a fresh
+# run (e.g. after fixing a bug in scam_agent).
 # ---------------------------------------------------------------------------
 EVAL_CACHE_PATH = os.path.join(os.path.dirname(__file__), "demo_eval_cache.json")
 
@@ -108,7 +110,7 @@ def analyze(payload: AnalyzeRequest):
     if not payload.text or not payload.text.strip():
         raise HTTPException(status_code=400, detail="text field cannot be empty")
 
-    # Wrapped so a Gemini-side failure (quota, transient outage, etc.) returns
+    # Wrapped so a Groq-side failure (quota, transient outage, etc.) returns
     # a clean 503 with a real message instead of an unhandled 500 — which
     # browsers report as a CORS error even when CORS itself is fine, since
     # FastAPI's default 500 response skips normal middleware header handling.
@@ -174,8 +176,8 @@ def report(payload: ReportRequest):
 @app.post("/evaluate/live")
 def evaluate_live(force_refresh: bool = False):
     """
-    Runs the classifier against a balanced 4-item demo subset of the dataset
-    LIVE, in front of whoever is watching. Proves the accuracy/false-positive
+    Runs the classifier against a balanced demo subset of the dataset LIVE,
+    in front of whoever is watching. Proves the accuracy/false-positive
     numbers in the deck instead of just asserting them.
 
     Cached to disk after the first successful run (no items errored) so

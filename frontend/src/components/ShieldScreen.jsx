@@ -190,7 +190,12 @@ export default function ShieldScreen({ onBack }) {
                       : "Report this"}
                   </button>
                 )}
-                <ShareWarningButton verdictLabel={result.verdict.replace("_", " ")} explanation={result.explanation} />
+                <ShareWarningButton
+                  verdict={result.verdict}
+                  riskScore={result.risk_score}
+                  redFlags={result.red_flags}
+                  explanation={result.explanation}
+                />
               </div>
             </div>
           )}

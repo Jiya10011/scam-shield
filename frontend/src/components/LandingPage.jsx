@@ -5,7 +5,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Hybrid detection pipeline",
-    desc: "A rule-based pre-filter flags known scam-pattern categories first, then a Gemini reasoning layer makes the final, explainable call.",
+    desc: "A rule-based pre-filter flags known scam-pattern categories first, then a Groq (Llama 3.3 70B) reasoning layer makes the final, explainable call.",
   },
   {
     icon: Languages,

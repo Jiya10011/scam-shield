@@ -36,11 +36,11 @@ export default function ExplainabilityPanel({ prefilterSignals }) {
         <div className="px-3 pb-3 flex flex-col gap-2">
           <p className="text-xs leading-relaxed" style={{ color: "var(--color-slate)" }}>
             A rule-based pre-filter scans for known scam-pattern categories first. Its findings are
-            passed as context into the Gemini reasoning layer, which makes the final call.
+            passed as context into the Groq reasoning layer, which makes the final call.
           </p>
           {categories.length === 0 ? (
             <p className="text-xs italic" style={{ color: "var(--color-slate)" }}>
-              No rule-based patterns matched — verdict is based on Gemini's contextual reasoning alone.
+              No rule-based patterns matched — verdict is based on Groq's contextual reasoning alone.
             </p>
           ) : (
             <ul className="flex flex-col gap-1">

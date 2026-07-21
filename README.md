@@ -22,7 +22,7 @@ Paste a suspicious call summary or message and get:
 A two-layer hybrid pipeline, not a single LLM prompt:
 
 1. **Rule-based pre-filter** — fast regex matching against five known digital-arrest-scam categories (authority impersonation, urgency/isolation, fabricated legal jeopardy, payment demands, fake official trappings)
-2. **Gemini reasoning layer** — receives the transcript *plus* the pre-filter's findings as context, and produces the final structured verdict
+2. **Groq (Llama 3.3 70B) reasoning layer** — receives the transcript *plus* the pre-filter's findings as context, and produces the final structured verdict
 
 This makes the system explainable and auditable, not a black box — the "How this was detected" panel in the UI shows exactly which signals fed into the final call.
 
@@ -33,7 +33,7 @@ Citizen input
 Rule-based pre-filter (regex, 5 categories)
      │
      ▼
-Gemini 2.5 Flash reasoning layer
+Groq / Llama 3.3 70B reasoning layer
      │
      ▼
 Structured verdict (risk score, red flags, explanation, action)
@@ -44,7 +44,7 @@ Structured verdict (risk score, red flags, explanation, action)
 
 ## Tech stack
 
-- **Backend**: FastAPI, Gemini API (`google-generativeai`), Python 3.12
+- **Backend**: FastAPI, Groq API (`groq`, Llama 3.3 70B), Python 3.12
 - **Frontend**: React, Vite, Tailwind CSS v4, lucide-react
 - **Data**: 50-item synthetic transcript dataset (25 scam / 25 legit, including deliberately tricky legitimate messages to stress-test false positives)
 
@@ -65,7 +65,7 @@ npm run setup   # one-time: creates backend venv, installs all dependencies
 npm run dev     # runs backend (port 8000) and frontend (port 5173) together
 ```
 
-Requires a Gemini API key in `backend/.env` (copy from `backend/.env.example`). Get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+Requires a Groq API key in `backend/.env` (copy from `backend/.env.example`). Get a free key at [console.groq.com](https://console.groq.com).
 
 ## Evaluation results
 
