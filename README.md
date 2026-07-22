@@ -73,7 +73,8 @@ Run `python backend/evaluate.py` (with venv activated) to test against the full 
 
 ## Live demo
 
-_[Deployed link to be added]_
+render deploy : https://scam-shield-6sp8.onrender.com
+vercel (live demo) : https://scam-shield-rust.vercel.app/
 
 ## Disclaimer
 
